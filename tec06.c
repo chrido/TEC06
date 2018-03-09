@@ -270,34 +270,6 @@ int main(int argc, char *argv[]) {
     if(ioctl(serial, TCSETS2, &tio)) {
       printf("Cannot write serial port info - TCSETS2");
     }
-
-    /**
-     * Setting a custom baud rate, at least on the FTDI devices, is done by
-     * configuring the custom divisor based on the baud rate, setting a few
-     * flags, and then configuring the port to run at 38400 baud.  We do that
-     * here.
-     * 
-     * https://sourceforge.net/p/ftdi-usb-sio/mailman/message/6501625/
-     */
-    
-    // Load port_info with the port configuration.
-    //if (ioctl(serial, TIOCGSERIAL, &port_info) < 0) {
-    //    printf("Cannot get serial port info - TIOCGSERIAL.\n");
-    //    exit(1);
-    //}
-
-    // Toggle the proper flags, and calculate the divisor based on the existing
-    // baud_base rate.  It'll be close enough.
-    //port_info.flags &= ~ASYNC_SPD_MASK;
-    //port_info.flags |= ASYNC_SPD_CUST;
-    //port_info.custom_divisor = port_info.baud_base / 128000;
-
-    // Write back the new port configuration.
-    //if (ioctl(serial, TIOCSSERIAL, &port_info) < 0) {
-    //    printf("Cannot set serial port info - TIOCSSERIAL.\n");
-    //    exit(1);
-    //}
-
     
     // Ensure the port is configured for blocking reads (only return after
     // there is data present).  We configure this more accurately later.
@@ -312,15 +284,15 @@ int main(int argc, char *argv[]) {
      * 'owner' of the port subject to sporatic job control and hangup signals, 
      * and also that the serial interface driver will read incoming data bytes."
      */
-    //options.c_cflag |= (CLOCAL | CREAD);
+    tio.c_cflag |= (CLOCAL | CREAD);
     // Enable parity.
-    //options.c_cflag |= PARENB;
+    tio.c_cflag |= PARENB;
     // Parity is not odd (even).
-    //options.c_cflag &= ~PARODD;
+    tio.c_cflag &= ~PARODD;
     // 8 data bits.
-    //options.c_cflag &= ~CSIZE;
-    //options.c_cflag |= CS8;
-
+    tio.c_cflag &= ~CSIZE;
+    tio.c_cflag |= CS8;
+    
     /**
      * Normal serial ports are configured for ASCII data, and make use of some
      * of the various control bytes to control the port.  The port may also
@@ -331,26 +303,24 @@ int main(int argc, char *argv[]) {
 
     // Disable software flow control (this swallows DC1 and DC3 by default,
     // or 0x17 and 0x19)
-    //options.c_iflag &= ~(IXON | IXOFF | IXANY);
+    tio.c_iflag &= ~(IXON | IXOFF | IXANY);
     
     // Don't remap newline to CR or CR to newline.  This is byte mutation!
-    //options.c_iflag &= ~(INLCR | ICRNL);
+    tio.c_iflag &= ~(INLCR | ICRNL);
     
     // Raw mode - I'm dealing with binary data, not newline terminated ASCII.
-    //options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    tio.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
     
     // Configure a half second timeout on port reads, with a minimum delivery
     // of 15 bytes.  This works well with how the TEC06 transmits and means that
     // I can receive a whole line of data at once.
-    //options.c_cc[VMIN]  = 15;
-    //options.c_cc[VTIME] = 5;   
-
-    // To use the above-configured baud rate, set the port to 38400 baud.
-    //cfsetispeed(&options, B38400);
-    //cfsetospeed(&options, B38400);
+    tio.c_cc[VMIN]  = 15;
+    tio.c_cc[VTIME] = 5;   
     
-    // Write everything back.
-    //tcsetattr(serial, TCSANOW, &options);
+    //Write back the configuration
+    if(ioctl(serial, TCSETS2, &tio)) {
+      printf("Cannot write serial port info - TCSETS2");
+    }
     
     /**
      * Main loop.  Read bytes from the serial port.  Once it finds sync, it

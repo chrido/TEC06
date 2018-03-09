@@ -50,14 +50,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
-#include <linux/serial.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
 #include <unistd.h>
-#include <termios.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
+#include "/usr/include/asm-generic/termbits.h"
+#include "/usr/include/asm-generic/ioctls.h"
+
 
 /**
  * Magic bytes.  The first two bytes are always 0xaa, 0x6a.  The last byte is
@@ -227,8 +229,8 @@ void print_frame_csv(const tec06_frame frame) {
  */
 int main(int argc, char *argv[]) {
     int serial;
-    struct serial_struct port_info;
-    struct termios options;
+    int speed = 128000;
+    struct termios2 tio;
     int use_csv = 0;
     uint8_t new_buffer[32];
 #ifdef DEBUG_HEX_OUTPUT
@@ -239,6 +241,10 @@ int main(int argc, char *argv[]) {
         printf("Use: %s [serial port] [1 to use CSV]\n", argv[0]);
         exit(1);
     }
+
+    /**
+     * My included serial cable seems to be recognized as a CH341
+     */
     
     serial = open(argv[1], O_RDWR | O_NOCTTY | O_NDELAY);
     if (serial < 0) {
@@ -248,6 +254,21 @@ int main(int argc, char *argv[]) {
     
     if ((argc == 3) && (atoi(argv[2]) == 1)) {
         use_csv = 1;
+    }
+
+    //Load port configuration using the termios2 api
+    if(ioctl(serial, TCGETS2, &tio)) {
+      printf("Cannot get serial port info - TCGETS2\n");
+    }
+
+    tio.c_cflag &= ~CBAUD;
+    tio.c_cflag |= BOTHER;
+    tio.c_ispeed = speed;
+    tio.c_ospeed = speed;
+
+    //Write back the configuration
+    if(ioctl(serial, TCSETS2, &tio)) {
+      printf("Cannot write serial port info - TCSETS2");
     }
 
     /**
@@ -260,22 +281,22 @@ int main(int argc, char *argv[]) {
      */
     
     // Load port_info with the port configuration.
-    if (ioctl(serial, TIOCGSERIAL, &port_info) < 0) {
-        printf("Cannot get serial port info.\n");
-        exit(1);
-    }
+    //if (ioctl(serial, TIOCGSERIAL, &port_info) < 0) {
+    //    printf("Cannot get serial port info - TIOCGSERIAL.\n");
+    //    exit(1);
+    //}
 
     // Toggle the proper flags, and calculate the divisor based on the existing
     // baud_base rate.  It'll be close enough.
-    port_info.flags &= ~ASYNC_SPD_MASK;
-    port_info.flags |= ASYNC_SPD_CUST;
-    port_info.custom_divisor = port_info.baud_base / 128000;
+    //port_info.flags &= ~ASYNC_SPD_MASK;
+    //port_info.flags |= ASYNC_SPD_CUST;
+    //port_info.custom_divisor = port_info.baud_base / 128000;
 
     // Write back the new port configuration.
-    if (ioctl(serial, TIOCSSERIAL, &port_info) < 0) {
-        printf("Cannot set serial port info.\n");
-        exit(1);
-    }
+    //if (ioctl(serial, TIOCSSERIAL, &port_info) < 0) {
+    //    printf("Cannot set serial port info - TIOCSSERIAL.\n");
+    //    exit(1);
+    //}
 
     
     // Ensure the port is configured for blocking reads (only return after
@@ -284,21 +305,21 @@ int main(int argc, char *argv[]) {
     
 
     // Get the serial port options for further configuration.
-    tcgetattr(serial, &options);
+    //tcgetattr(serial, &options);
     /**
      * "The c_cflag member contains two options that should always be enabled, 
      * CLOCAL and CREAD. These will ensure that your program does not become the
      * 'owner' of the port subject to sporatic job control and hangup signals, 
      * and also that the serial interface driver will read incoming data bytes."
      */
-    options.c_cflag |= (CLOCAL | CREAD);
+    //options.c_cflag |= (CLOCAL | CREAD);
     // Enable parity.
-    options.c_cflag |= PARENB;
+    //options.c_cflag |= PARENB;
     // Parity is not odd (even).
-    options.c_cflag &= ~PARODD;
+    //options.c_cflag &= ~PARODD;
     // 8 data bits.
-    options.c_cflag &= ~CSIZE;
-    options.c_cflag |= CS8;
+    //options.c_cflag &= ~CSIZE;
+    //options.c_cflag |= CS8;
 
     /**
      * Normal serial ports are configured for ASCII data, and make use of some
@@ -310,26 +331,26 @@ int main(int argc, char *argv[]) {
 
     // Disable software flow control (this swallows DC1 and DC3 by default,
     // or 0x17 and 0x19)
-    options.c_iflag &= ~(IXON | IXOFF | IXANY);
+    //options.c_iflag &= ~(IXON | IXOFF | IXANY);
     
     // Don't remap newline to CR or CR to newline.  This is byte mutation!
-    options.c_iflag &= ~(INLCR | ICRNL);
+    //options.c_iflag &= ~(INLCR | ICRNL);
     
     // Raw mode - I'm dealing with binary data, not newline terminated ASCII.
-    options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    //options.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
     
     // Configure a half second timeout on port reads, with a minimum delivery
     // of 15 bytes.  This works well with how the TEC06 transmits and means that
     // I can receive a whole line of data at once.
-    options.c_cc[VMIN]  = 15;
-    options.c_cc[VTIME] = 5;   
+    //options.c_cc[VMIN]  = 15;
+    //options.c_cc[VTIME] = 5;   
 
     // To use the above-configured baud rate, set the port to 38400 baud.
-    cfsetispeed(&options, B38400);
-    cfsetospeed(&options, B38400);
+    //cfsetispeed(&options, B38400);
+    //cfsetospeed(&options, B38400);
     
     // Write everything back.
-    tcsetattr(serial, TCSANOW, &options);
+    //tcsetattr(serial, TCSANOW, &options);
     
     /**
      * Main loop.  Read bytes from the serial port.  Once it finds sync, it

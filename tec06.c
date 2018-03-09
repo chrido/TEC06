@@ -19,7 +19,7 @@
  * However, it works on Windows, so I reverse engineered the protocol.  Partly
  * because it was useful, mostly because it was fun.
  * 
- * This code works on Linux with a FTDI 232R based serial adapter.  I cannot
+ * This code works on Linux with a CH431 based serial adapter.  I cannot
  * promise it works on anything else - you may have to find your own way to set
  * 128,000 baud, even parity, 8 data bits.  It's a really weird rate.
  * 
@@ -268,16 +268,13 @@ int main(int argc, char *argv[]) {
 
     //Write back the configuration
     if(ioctl(serial, TCSETS2, &tio)) {
-      printf("Cannot write serial port info - TCSETS2");
+      printf("Cannot write serial port info - TCSETS2\n");
     }
     
     // Ensure the port is configured for blocking reads (only return after
     // there is data present).  We configure this more accurately later.
     fcntl(serial, F_SETFL, 0);
     
-
-    // Get the serial port options for further configuration.
-    //tcgetattr(serial, &options);
     /**
      * "The c_cflag member contains two options that should always be enabled, 
      * CLOCAL and CREAD. These will ensure that your program does not become the

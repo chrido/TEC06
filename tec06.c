@@ -261,6 +261,9 @@ int main(int argc, char *argv[]) {
       printf("Cannot get serial port info - TCGETS2\n");
     }
 
+    //Disable buffering for output
+    setbuf(stdout, NULL);
+
     tio.c_cflag &= ~CBAUD;
     tio.c_cflag |= BOTHER;
     tio.c_ispeed = speed;
